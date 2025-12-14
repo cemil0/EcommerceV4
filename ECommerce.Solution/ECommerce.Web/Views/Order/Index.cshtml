@@ -1,0 +1,91 @@
+@model IEnumerable<ECommerce.Application.DTOs.OrderDto>
+
+@{
+    ViewData["Title"] = "Siparişlerim";
+}
+
+<div class="container mt-4">
+    <h2>Siparişlerim</h2>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info">
+            <h4>Henüz siparişiniz yok</h4>
+            <p><a href="/Products">Alışverişe başlamak için tıklayın</a></p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Sipariş No</th>
+                        <th>Tarih</th>
+                        <th>Tip</th>
+                        <th>Durum</th>
+                        <th>Toplam</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model)
+                    {
+                        <tr>
+                            <td><strong>@order.OrderNumber</strong></td>
+                            <td>@order.OrderDate.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>
+                                @if (order.OrderType == "B2B")
+                                {
+                                    <span class="badge bg-primary">B2B</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-info">B2C</span>
+                                }
+                            </td>
+                            <td>
+                                @switch (order.OrderStatus)
+                                {
+                                    case "Pending":
+                                        <span class="badge bg-warning">Beklemede</span>
+                                        break;
+                                    case "Approved":
+                                        <span class="badge bg-success">Onaylandı</span>
+                                        break;
+                                    case "Processing":
+                                        <span class="badge bg-info">İşleniyor</span>
+                                        break;
+                                    case "Shipped":
+                                        <span class="badge bg-primary">Kargoda</span>
+                                        break;
+                                    case "Delivered":
+                                        <span class="badge bg-success">Teslim Edildi</span>
+                                        break;
+                                    case "Cancelled":
+                                        <span class="badge bg-danger">İptal</span>
+                                        break;
+                                    default:
+                                        <span class="badge bg-secondary">@order.OrderStatus</span>
+                                        break;
+                                }
+                            </td>
+                            <td><strong>@order.TotalAmount.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</strong></td>
+                            <td>
+                                <a href="/Order/Details/@order.OrderId" class="btn btn-sm btn-primary">Detay</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

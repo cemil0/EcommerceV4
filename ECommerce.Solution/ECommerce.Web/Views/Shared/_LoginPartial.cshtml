@@ -1,0 +1,45 @@
+@using Microsoft.AspNetCore.Identity
+@using ECommerce.Domain.Entities
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+
+<ul class="navbar-nav ms-auto">
+    @if (SignInManager.IsSignedIn(User))
+    {
+        var user = await UserManager.GetUserAsync(User);
+        <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-person-circle"></i> @user?.FirstName @user?.LastName
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                <li><a class="dropdown-item" asp-controller="Order" asp-action="Index">
+                    <i class="bi bi-box-seam"></i> Siparişlerim
+                </a></li>
+                <li><a class="dropdown-item" href="#">
+                    <i class="bi bi-person"></i> Profilim
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <form method="post" asp-controller="Account" asp-action="Logout" class="d-inline">
+                        <button type="submit" class="dropdown-item">
+                            <i class="bi bi-box-arrow-right"></i> Çıkış Yap
+                        </button>
+                    </form>
+                </li>
+            </ul>
+        </li>
+    }
+    else
+    {
+        <li class="nav-item">
+            <a class="nav-link" asp-controller="Account" asp-action="Login">
+                <i class="bi bi-box-arrow-in-right"></i> Giriş Yap
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" asp-controller="Account" asp-action="Register">
+                <i class="bi bi-person-plus"></i> Kayıt Ol
+            </a>
+        </li>
+    }
+</ul>

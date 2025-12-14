@@ -1,0 +1,424 @@
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IMapper _mapper;
+    private readonly IStockReservationService _stockReservationService;
+    private readonly IPriceValidationService _priceValidationService;
+    private readonly IOrderBusinessRules _orderBusinessRules;
+    private readonly IOrderStateMachine _orderStateMachine;
+    private readonly ILogger<OrderService> _logger;
+
+    public OrderService(
+        IUnitOfWork unitOfWork, 
+        IMapper mapper,
+        IStockReservationService stockReservationService,
+        IPriceValidationService priceValidationService,
+        IOrderBusinessRules orderBusinessRules,
+        IOrderStateMachine orderStateMachine,
+        ILogger<OrderService> logger)
+    {
+        _unitOfWork = unitOfWork;
+        _mapper = mapper;
+        _stockReservationService = stockReservationService;
+        _priceValidationService = priceValidationService;
+        _orderBusinessRules = orderBusinessRules;
+        _orderStateMachine = orderStateMachine;
+        _logger = logger;
+    }
+
+    public async Task<OrderDto?> GetByIdAsync(int id)
+    {
+        var order = await _unitOfWork.Orders.GetByIdAsync(id);
+        return order != null ? _mapper.Map<OrderDto>(order) : null;
+    }
+
+    public async Task<OrderDto?> GetByOrderNumberAsync(string orderNumber)
+    {
+        var order = await _unitOfWork.Orders.GetByOrderNumberAsync(orderNumber);
+        return order != null ? _mapper.Map<OrderDto>(order) : null;
+    }
+
+    public async Task<IEnumerable<OrderDto>> GetByCustomerIdAsync(int customerId)
+    {
+        var orders = await _unitOfWork.Orders.GetByCustomerIdAsync(customerId);
+        return _mapper.Map<IEnumerable<OrderDto>>(orders);
+    }
+
+    public async Task<IEnumerable<OrderDto>> GetAllAsync()
+    {
+        var orders = await _unitOfWork.Orders.GetAllAsync();
+        return _mapper.Map<IEnumerable<OrderDto>>(orders);
+    }
+
+    public async Task<OrderDto> CreateB2COrderAsync(CreateOrderRequest request)
+    {
+        // BR-009: B2C Order Creation
+        
+        // Start single transaction for entire operation
+        await _unitOfWork.BeginTransactionAsync();
+
+        try
+        {
+            // 0. BUSINESS RULES VALIDATION
+            var businessRulesResult = await _orderBusinessRules.ValidateB2COrderAsync(request);
+            if (!businessRulesResult.IsValid)
+            {
+                throw new OrderBusinessRuleException(
+                    businessRulesResult.ErrorMessage!,
+                    businessRulesResult.ErrorCode!);
+            }
+
+            // 1. STOCK RESERVATION (CRITICAL - Must be first!)
+            var stockItems = request.Items.Select(i => new StockReservationItemDto
+            {
+                ProductVariantId = i.ProductVariantId,
+                Quantity = i.Quantity
+            }).ToList();
+
+            var stockResult = await _stockReservationService.ReserveStockAsync(stockItems);
+            
+            if (!stockResult.IsSuccess)
+            {
+                throw new StockNotAvailableException(stockResult.ErrorMessage!);
+            }
+
+            // 2. PRICE VALIDATION (Prevent outdated prices)
+            var priceItems = request.Items.Select(i => new PriceValidationItemDto
+            {
+                ProductVariantId = i.ProductVariantId,
+                ExpectedPrice = i.UnitPrice
+            }).ToList();
+
+            var priceResult = await _priceValidationService.ValidatePricesAsync(priceItems);
+            
+            if (!priceResult.IsValid)
+            {
+                throw new PriceChangedException(priceResult.PriceChanges);
+            }
+
+            // 3. Generate order number (BR-011)
+            var orderNumber = await GenerateOrderNumberAsync();
+
+            // 4. Calculate totals
+            decimal subtotal = 0;
+            decimal totalTax = 0;
+            var orderItems = new List<OrderItem>();
+
+            // FIX #1: Use Query + Include to prevent N+1 and null reference
+            var variantIds = request.Items.Select(i => i.ProductVariantId).ToList();
+            var variants = await _unitOfWork.ProductVariants
+                .Query()
+                .Include(v => v.Product)
+                .Where(v => variantIds.Contains(v.ProductVariantId))
+                .ToListAsync();
+
+            foreach (var item in request.Items)
+            {
+                var variant = variants.FirstOrDefault(v => v.ProductVariantId == item.ProductVariantId);
+                if (variant == null)
+                    throw new InvalidOperationException($"Product variant {item.ProductVariantId} not found");
+
+                // FIX #4: Use validated price from request (already validated by PriceValidationService)
+                var unitPrice = item.UnitPrice;
+                var itemSubtotal = unitPrice * item.Quantity;
+                var itemTax = itemSubtotal * 0.20m; // 20% VAT per item
+                
+                subtotal += itemSubtotal;
+                totalTax += itemTax; // FIX #3: Accumulate item-level tax
+
+                orderItems.Add(new OrderItem
+                {
+                    ProductVariantId = item.ProductVariantId,
+                    ProductName = variant.Product.ProductName,
+                    VariantName = variant.VariantName,
+                    SKU = variant.VariantSKU,
+                    Quantity = item.Quantity,
+                    UnitPrice = unitPrice,
+                    DiscountAmount = 0, // TODO: Apply discounts
+                    TaxAmount = itemTax, // Item-level tax
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+
+            // FIX #3: Use accumulated tax from items (not recalculated)
+            var taxAmount = totalTax;
+            var shippingAmount = 50m; // Fixed shipping for now (BR-015)
+            var totalAmount = subtotal + taxAmount + shippingAmount;
+
+            // 4. Create order
+            var order = new Order
+            {
+                OrderNumber = orderNumber,
+                CustomerId = request.CustomerId,
+                CompanyId = null,
+                OrderType = OrderType.B2C,
+                OrderStatus = OrderStatus.Pending, // B2C starts as Pending
+                SubtotalAmount = subtotal,
+                DiscountAmount = 0,
+                TaxAmount = taxAmount,
+                ShippingAmount = shippingAmount,
+                TotalAmount = totalAmount,
+                Currency = "TRY",
+                BillingAddressId = request.BillingAddressId,
+                ShippingAddressId = request.ShippingAddressId,
+                CouponCode = request.CouponCode,
+                CustomerNotes = request.CustomerNotes,
+                OrderDate = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            await _unitOfWork.Orders.AddAsync(order);
+            await _unitOfWork.SaveChangesAsync();
+
+            // Add order items
+            foreach (var item in orderItems)
+            {
+                item.OrderId = order.OrderId;
+            }
+            await _unitOfWork.OrderItems.AddRangeAsync(orderItems);
+
+            // 5. Commit entire transaction (stock + order)
+            await _unitOfWork.CommitTransactionAsync();
+
+            // Reload order with items
+            var createdOrder = await _unitOfWork.Orders.GetByOrderNumberAsync(orderNumber);
+            return _mapper.Map<OrderDto>(createdOrder!);
+        }
+        catch (Exception ex)
+        {
+            // Log the error before rollback
+            _logger.LogError(ex, "B2C order creation failed for customer {CustomerId}", request.CustomerId);
+            
+            // Rollback EVERYTHING (stock reservation + order)
+            await _unitOfWork.RollbackTransactionAsync();
+            throw;
+        }
+    }
+
+    public async Task<OrderDto> CreateB2BOrderAsync(CreateOrderRequest request)
+    {
+        // BR-010: B2B Order Creation
+        if (!request.CompanyId.HasValue)
+            throw new InvalidOperationException("CompanyId is required for B2B orders");
+
+        // Start single transaction for entire operation
+        await _unitOfWork.BeginTransactionAsync();
+
+        try
+        {
+            // 0. BUSINESS RULES VALIDATION
+            var businessRulesResult = await _orderBusinessRules.ValidateB2BOrderAsync(request, request.CompanyId!.Value);
+            if (!businessRulesResult.IsValid)
+            {
+                throw new OrderBusinessRuleException(
+                    businessRulesResult.ErrorMessage!,
+                    businessRulesResult.ErrorCode!);
+            }
+
+            // 1. STOCK RESERVATION
+            var stockItems = request.Items.Select(i => new StockReservationItemDto
+            {
+                ProductVariantId = i.ProductVariantId,
+                Quantity = i.Quantity
+            }).ToList();
+
+            var stockResult = await _stockReservationService.ReserveStockAsync(stockItems);
+            
+            if (!stockResult.IsSuccess)
+            {
+                throw new StockNotAvailableException(stockResult.ErrorMessage!);
+            }
+
+            // 2. PRICE VALIDATION (Same as B2C)
+            var priceItems = request.Items.Select(i => new PriceValidationItemDto
+            {
+                ProductVariantId = i.ProductVariantId,
+                ExpectedPrice = i.UnitPrice
+            }).ToList();
+
+            var priceResult = await _priceValidationService.ValidatePricesAsync(priceItems);
+            
+            if (!priceResult.IsValid)
+            {
+                throw new PriceChangedException(priceResult.PriceChanges);
+            }
+
+            // 3. Generate order number (BR-011)
+            var orderNumber = await GenerateOrderNumberAsync();
+
+            // 4. Calculate totals (B2B pricing logic)
+            decimal subtotal = 0;
+            decimal totalTax = 0;
+            var orderItems = new List<OrderItem>();
+
+            // FIX #1: Use Query + Include to prevent N+1 and null reference
+            var variantIds = request.Items.Select(i => i.ProductVariantId).ToList();
+            var variants = await _unitOfWork.ProductVariants
+                .Query()
+                .Include(v => v.Product)
+                .Where(v => variantIds.Contains(v.ProductVariantId))
+                .ToListAsync();
+
+            foreach (var item in request.Items)
+            {
+                var variant = variants.FirstOrDefault(v => v.ProductVariantId == item.ProductVariantId);
+                if (variant == null)
+                    throw new InvalidOperationException($"Product variant {item.ProductVariantId} not found");
+
+                // FIX #4: Use validated price from request (not BasePrice)
+                var unitPrice = item.UnitPrice;
+                var itemSubtotal = unitPrice * item.Quantity;
+                var itemTax = itemSubtotal * 0.20m; // 20% VAT per item
+                
+                subtotal += itemSubtotal;
+                totalTax += itemTax; // FIX #3: Accumulate item-level tax
+
+                orderItems.Add(new OrderItem
+                {
+                    ProductVariantId = item.ProductVariantId,
+                    ProductName = variant.Product.ProductName,
+                    VariantName = variant.VariantName,
+                    SKU = variant.VariantSKU,
+                    Quantity = item.Quantity,
+                    UnitPrice = unitPrice,
+                    DiscountAmount = 0, // TODO: Apply B2B discounts
+                    TaxAmount = itemTax, // Item-level tax
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+
+            // FIX #3: Use accumulated tax from items
+            var taxAmount = totalTax;
+            var shippingAmount = 0m; // Free shipping for B2B
+            var totalAmount = subtotal + taxAmount + shippingAmount;
+
+            // 4. Create order
+            var order = new Order
+            {
+                OrderNumber = orderNumber,
+                CustomerId = request.CustomerId,
+                CompanyId = request.CompanyId,
+                OrderType = OrderType.B2B,
+                OrderStatus = OrderStatus.Approved, // B2B auto-approved (BR-010)
+                SubtotalAmount = subtotal,
+                DiscountAmount = 0,
+                TaxAmount = taxAmount,
+                ShippingAmount = shippingAmount,
+                TotalAmount = totalAmount,
+                Currency = "TRY",
+                BillingAddressId = request.BillingAddressId,
+                ShippingAddressId = request.ShippingAddressId,
+                CustomerNotes = request.CustomerNotes,
+                OrderDate = DateTime.UtcNow,
+                ApprovedDate = DateTime.UtcNow, // Auto-approved
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            await _unitOfWork.Orders.AddAsync(order);
+            await _unitOfWork.SaveChangesAsync();
+
+            // Add order items
+            foreach (var item in orderItems)
+            {
+                item.OrderId = order.OrderId;
+            }
+            await _unitOfWork.OrderItems.AddRangeAsync(orderItems);
+
+            // 5. Commit entire transaction (stock + order)
+            await _unitOfWork.CommitTransactionAsync();
+
+            // Reload order with items
+            var createdOrder = await _unitOfWork.Orders.GetByOrderNumberAsync(orderNumber);
+            return _mapper.Map<OrderDto>(createdOrder!);
+        }
+        catch (Exception ex)
+        {
+            // Log the error before rollback
+            _logger.LogError(ex, "B2B order creation failed for company {CompanyId}", request.CompanyId);
+            
+            // Rollback EVERYTHING (stock reservation + order)
+            await _unitOfWork.RollbackTransactionAsync();
+            throw;
+        }
+    }
+
+    public async Task<string> GenerateOrderNumberAsync()
+    {
+        // BR-011: Order Number Generation (ORD-YYYY-NNNNNN)
+        var year = DateTime.UtcNow.Year;
+        var count = await _unitOfWork.Orders.GetCountForYearAsync(year);
+        var orderNumber = $"ORD-{year}-{(count + 1):D6}";
+        return orderNumber;
+    }
+
+    public async Task<OrderDto> UpdateOrderStatusAsync(int orderId, OrderStatus newStatus, string? reason = null)
+    {
+        await _unitOfWork.BeginTransactionAsync();
+
+        try
+        {
+            // Use state machine to transition
+            await _orderStateMachine.TransitionAsync(orderId, newStatus, reason);
+
+            await _unitOfWork.CommitTransactionAsync();
+
+            var order = await _unitOfWork.Orders.GetByIdAsync(orderId);
+            return _mapper.Map<OrderDto>(order!);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync();
+            throw;
+        }
+    }
+
+    public async Task<List<OrderStatus>> GetValidNextStatesAsync(int orderId)
+    {
+        var order = await _unitOfWork.Orders.GetByIdAsync(orderId);
+        
+        if (order == null)
+        {
+            throw new InvalidOperationException($"Order {orderId} not found");
+        }
+
+        return _orderStateMachine.GetValidNextStates(order.OrderStatus, order.OrderType);
+    }
+
+    // Pagination methods
+    public async Task<PagedResponse<OrderDto>> GetPagedAsync(PagedRequest request)
+    {
+        var query = _unitOfWork.Orders
+            .Query()
+            .ApplySorting(request.SortBy ?? "OrderDate", request.SortDescending);
+
+        var pagedOrders = await query.ToPagedResponseAsync(request);
+        
+        var orderDtos = _mapper.Map<List<OrderDto>>(pagedOrders.Data);
+        
+        return new PagedResponse<OrderDto>(
+            orderDtos,
+            pagedOrders.Page,
+            pagedOrders.PageSize,
+            pagedOrders.TotalCount);
+    }
+
+    public async Task<PagedResponse<OrderDto>> GetPagedByCustomerAsync(int customerId, PagedRequest request)
+    {
+        var query = _unitOfWork.Orders
+            .Query()
+            .Where(o => o.CustomerId == customerId)
+            .ApplySorting(request.SortBy ?? "OrderDate", request.SortDescending);
+
+        var pagedOrders = await query.ToPagedResponseAsync(request);
+        
+        var orderDtos = _mapper.Map<List<OrderDto>>(pagedOrders.Data);
+        
+        return new PagedResponse<OrderDto>(
+            orderDtos,
+            pagedOrders.Page,
+            pagedOrders.PageSize,
+            pagedOrders.TotalCount);
+    }
+}

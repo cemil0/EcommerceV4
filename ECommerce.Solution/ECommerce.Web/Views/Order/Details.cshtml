@@ -1,0 +1,155 @@
+@model ECommerce.Application.DTOs.OrderDto
+
+@{
+    ViewData["Title"] = "Sipariş Detayı - " + Model.OrderNumber;
+}
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Sipariş Detayı</h2>
+        <a href="/Order" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Siparişlerime Dön
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Order Info Card -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Sipariş Bilgileri</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Sipariş No:</strong> @Model.OrderNumber</p>
+                            <p><strong>Sipariş Tarihi:</strong> @Model.OrderDate.ToString("dd.MM.yyyy HH:mm")</p>
+                            <p><strong>Sipariş Tipi:</strong> 
+                                @if (Model.OrderType == "B2B")
+                                {
+                                    <span class="badge bg-primary">B2B</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-info">B2C</span>
+                                }
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Durum:</strong>
+                                @switch (Model.OrderStatus)
+                                {
+                                    case "Pending":
+                                        <span class="badge bg-warning">Beklemede</span>
+                                        break;
+                                    case "Approved":
+                                        <span class="badge bg-success">Onaylandı</span>
+                                        break;
+                                    case "Processing":
+                                        <span class="badge bg-info">İşleniyor</span>
+                                        break;
+                                    case "Shipped":
+                                        <span class="badge bg-primary">Kargoda</span>
+                                        break;
+                                    case "Delivered":
+                                        <span class="badge bg-success">Teslim Edildi</span>
+                                        break;
+                                    case "Cancelled":
+                                        <span class="badge bg-danger">İptal</span>
+                                        break;
+                                    default:
+                                        <span class="badge bg-secondary">@Model.OrderStatus</span>
+                                        break;
+                                }
+                            </p>
+                            @if (!string.IsNullOrEmpty(Model.CustomerNotes))
+                            {
+                                <p><strong>Notlar:</strong> @Model.CustomerNotes</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Order Items Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h5>Sipariş Kalemleri</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Ürün</th>
+                                <th>SKU</th>
+                                <th>Birim Fiyat</th>
+                                <th>Miktar</th>
+                                <th>Toplam</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.OrderItems)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@item.ProductName</strong><br />
+                                        <small class="text-muted">@item.VariantName</small>
+                                    </td>
+                                    <td><small>@item.SKU</small></td>
+                                    <td>@item.UnitPrice.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</td>
+                                    <td>@item.Quantity</td>
+                                    <td><strong>@item.TotalPrice.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</strong></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Order Summary Card -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Sipariş Özeti</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Ara Toplam:</span>
+                        <strong>@Model.SubtotalAmount.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</strong>
+                    </div>
+                    @if (Model.DiscountAmount > 0)
+                    {
+                        <div class="d-flex justify-content-between mb-2 text-success">
+                            <span>İndirim:</span>
+                            <strong>-@Model.DiscountAmount.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</strong>
+                        </div>
+                    }
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>KDV (%20):</span>
+                        <strong>@Model.TaxAmount.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Kargo:</span>
+                        <strong>@Model.ShippingAmount.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</strong>
+                    </div>
+                    <hr />
+                    <div class="d-flex justify-content-between">
+                        <strong>Toplam:</strong>
+                        <strong class="text-primary fs-5">@Model.TotalAmount.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Info Card (Placeholder) -->
+            <div class="card">
+                <div class="card-header">
+                    <h5>Ödeme Bilgisi</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Ödeme bilgileri yakında eklenecek</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

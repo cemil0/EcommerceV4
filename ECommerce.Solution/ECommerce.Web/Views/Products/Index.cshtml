@@ -1,0 +1,98 @@
+@model IEnumerable<ECommerce.Application.DTOs.ProductDto>
+
+@{
+    ViewData["Title"] = "Ürünler";
+}
+
+<div class="container mt-4">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3">
+            <h5>Kategoriler</h5>
+            <div class="list-group">
+                <a href="/Products" class="list-group-item list-group-item-action @(ViewBag.CategoryName == null ? "active" : "")">
+                    Tüm Ürünler
+                </a>
+                @if (ViewBag.Categories != null)
+                {
+                    @foreach (var category in (IEnumerable<ECommerce.Application.DTOs.CategoryDto>)ViewBag.Categories)
+                    {
+                        <a href="/Products?categoryId=@category.CategoryId" 
+                           class="list-group-item list-group-item-action @(ViewBag.CategoryName == category.CategoryName ? "active" : "")">
+                            @category.CategoryName
+                        </a>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Products -->
+        <div class="col-md-9">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2>
+                    @if (ViewBag.CategoryName != null)
+                    {
+                        @ViewBag.CategoryName
+                    }
+                    else if (ViewBag.SearchTerm != null)
+                    {
+                        <text>Arama Sonuçları: "@ViewBag.SearchTerm"</text>
+                    }
+                    else
+                    {
+                        <text>Tüm Ürünler</text>
+                    }
+                </h2>
+
+                <!-- Search Form -->
+                <form method="get" action="/Products" class="d-flex">
+                    <input type="text" name="search" class="form-control me-2" placeholder="Ürün ara..." value="@ViewBag.SearchTerm" />
+                    <button type="submit" class="btn btn-primary">Ara</button>
+                </form>
+            </div>
+
+            @if (Model.Any())
+            {
+                <div class="row">
+                    @foreach (var product in Model)
+                    {
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title">@product.ProductName</h5>
+                                    <p class="card-text text-muted">@product.Brand</p>
+                                    <p class="card-text">@product.ShortDescription</p>
+                                    
+                                    @if (product.ProductVariants.Any())
+                                    {
+                                        var minPrice = product.ProductVariants.Min(v => v.SalePrice ?? v.BasePrice);
+                                        <p class="card-text">
+                                            <strong class="text-primary">@minPrice.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</strong>
+                                            <span class="text-muted">dan başlayan fiyatlarla</span>
+                                        </p>
+                                    }
+
+                                    @if (product.IsFeatured)
+                                    {
+                                        <span class="badge bg-warning text-dark">Öne Çıkan</span>
+                                    }
+                                </div>
+                                <div class="card-footer">
+                                    <a href="/Products/Details/@product.ProductId" class="btn btn-primary btn-sm w-100">
+                                        Detayları Gör
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info">
+                    Ürün bulunamadı.
+                </div>
+            }
+        </div>
+    </div>
+</div>

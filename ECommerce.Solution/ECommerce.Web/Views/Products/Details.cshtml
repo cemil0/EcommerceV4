@@ -1,0 +1,162 @@
+@model ECommerce.Application.DTOs.ProductDto
+
+@{
+    ViewData["Title"] = Model.ProductName;
+}
+
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/">Ana Sayfa</a></li>
+            <li class="breadcrumb-item"><a href="/Products">Ürünler</a></li>
+            @if (Model.Category != null)
+            {
+                <li class="breadcrumb-item"><a href="/Products?categoryId=@Model.Category.CategoryId">@Model.Category.CategoryName</a></li>
+            }
+            <li class="breadcrumb-item active" aria-current="page">@Model.ProductName</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Product Image (Placeholder) -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center" style="min-height: 400px; display: flex; align-items: center; justify-content: center; background-color: #f8f9fa;">
+                    <div>
+                        <i class="bi bi-image" style="font-size: 100px; color: #dee2e6;"></i>
+                        <p class="text-muted mt-3">Ürün Görseli</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Product Info -->
+        <div class="col-md-6">
+            <h1>@Model.ProductName</h1>
+            
+            @if (!string.IsNullOrEmpty(Model.Brand))
+            {
+                <p class="text-muted">Marka: <strong>@Model.Brand</strong></p>
+            }
+
+            <p class="text-muted">SKU: @Model.SKU</p>
+
+            @if (Model.IsFeatured)
+            {
+                <span class="badge bg-warning text-dark mb-3">Öne Çıkan Ürün</span>
+            }
+
+            <hr />
+
+            @if (!string.IsNullOrEmpty(Model.ShortDescription))
+            {
+                <p class="lead">@Model.ShortDescription</p>
+            }
+
+            <hr />
+
+            <!-- Product Variants -->
+            @if (Model.ProductVariants.Any())
+            {
+                <h5>Varyantlar</h5>
+                <div class="list-group mb-3">
+                    @foreach (var variant in Model.ProductVariants)
+                    {
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">@variant.VariantName</h6>
+                                    <small class="text-muted">
+                                        @if (!string.IsNullOrEmpty(variant.Color))
+                                        {
+                                            <span>Renk: @variant.Color</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(variant.Size))
+                                        {
+                                            <span class="ms-2">Beden: @variant.Size</span>
+                                        }
+                                    </small>
+                                    <p class="mb-0 mt-1">
+                                        @if (variant.SalePrice.HasValue && variant.SalePrice < variant.BasePrice)
+                                        {
+                                            <span class="text-decoration-line-through text-muted">@variant.BasePrice.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</span>
+                                            <strong class="text-danger ms-2">@variant.SalePrice.Value.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</strong>
+                                        }
+                                        else
+                                        {
+                                            <strong class="text-primary">@variant.BasePrice.ToString("C", new System.Globalization.CultureInfo("tr-TR"))</strong>
+                                        }
+                                    </p>
+                                </div>
+                                <div>
+                                    <form method="post" asp-controller="Cart" asp-action="AddToCart" class="d-inline">
+                                        <input type="hidden" name="productVariantId" value="@variant.ProductVariantId" />
+                                        <input type="hidden" name="quantity" value="1" />
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="bi bi-cart-plus"></i> Sepete Ekle
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    Bu ürün için aktif varyant bulunmamaktadır.
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Product Description -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#description" type="button">
+                        Açıklama
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#specifications" type="button">
+                        Özellikler
+                    </button>
+                </li>
+            </ul>
+            <div class="tab-content p-3 border border-top-0">
+                <div class="tab-pane fade show active" id="description">
+                    <p>@Model.ShortDescription</p>
+                </div>
+                <div class="tab-pane fade" id="specifications">
+                    <table class="table">
+                        <tbody>
+                            <tr>
+                                <th>SKU</th>
+                                <td>@Model.SKU</td>
+                            </tr>
+                            @if (!string.IsNullOrEmpty(Model.Brand))
+                            {
+                                <tr>
+                                    <th>Marka</th>
+                                    <td>@Model.Brand</td>
+                                </tr>
+                            }
+                            @if (Model.Category != null)
+                            {
+                                <tr>
+                                    <th>Kategori</th>
+                                    <td>@Model.Category.CategoryName</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+

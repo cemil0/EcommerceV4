@@ -1,0 +1,37 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\Cemil \u00D6zt\u00FCrk\\Desktop\\BACKEND\u002BVER\u0130TABANI\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Cemil \u00D6zt\u00FCrk\\Desktop\\BACKEND\u002BVER\u0130TABANI\\ECommerce.Solution\\ECommerce.Api\\Program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:ECommerce.Solution\\ECommerce.Api\\Program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Users\\Cemil \u00D6zt\u00FCrk\\Desktop\\BACKEND\u002BVER\u0130TABANI\\ECommerce.Solution\\ECommerce.Api\\Program.cs",
+              "RelativeDocumentMoniker": "ECommerce.Solution\\ECommerce.Api\\Program.cs",
+              "ToolTip": "C:\\Users\\Cemil \u00D6zt\u00FCrk\\Desktop\\BACKEND\u002BVER\u0130TABANI\\ECommerce.Solution\\ECommerce.Api\\Program.cs",
+              "RelativeToolTip": "ECommerce.Solution\\ECommerce.Api\\Program.cs",
+              "ViewState": "AgIAABsAAAAAAAAAAAAswBoAAAA4AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-13T20:29:00.937Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

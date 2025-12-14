@@ -1,0 +1,19 @@
+@{
+    ViewData["Title"] = "Erişim Engellendi";
+}
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="alert alert-danger">
+                <h4 class="alert-heading">Erişim Engellendi</h4>
+                <p>Bu sayfaya erişim yetkiniz bulunmamaktadır.</p>
+                <hr>
+                <p class="mb-0">
+                    <a href="/" class="btn btn-primary">Ana Sayfaya Dön</a>
+                    <a asp-controller="Account" asp-action="Login" class="btn btn-secondary">Giriş Yap</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
